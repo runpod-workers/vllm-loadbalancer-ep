@@ -1,7 +1,19 @@
 #!/bin/bash
 
-# NOTE: This script is not ran by default for the template docker image.
+# NOTE: This script is not run by default for the template docker image.
 #       If you use a custom base image you can add your required system dependencies here.
+#
+# USAGE: This script can be used to install additional system packages or configurations:
+#   - Jupyter kernels (R, Julia, Scala, etc.)
+#   - Additional CUDA libraries or drivers
+#   - System-level debugging tools (htop, nvtop, etc.)
+#   - Custom compilers or build tools
+#   - SSH keys or security configurations
+#   - Custom Python versions or environments
+#
+# To use this script, uncomment the COPY and RUN commands in the Dockerfile:
+#   COPY builder/setup.sh /setup.sh
+#   RUN chmod +x /setup.sh && /setup.sh
 
 set -e # Stop script on error
 apt-get update && apt-get upgrade -y # Update System
