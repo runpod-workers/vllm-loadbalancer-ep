@@ -4,12 +4,12 @@ A FastAPI-based load balancer for serving vLLM models with RunPod integration. P
 
 ## Docker Image
 
-Use the pre-built Docker image: `mwiki/lbvll:v1`
+Use the pre-built Docker image: `runpod/vllm-loadbalancer:dev`
 
 ## Deployment on RunPod
 
 1. Create a new serverless endpoint
-2. Use Docker image: `mwiki/lbvll:v4`
+2. Use Docker image: `runpod/vllm-loadbalancer:dev`
 3. Set environment variable: `MODEL_NAME` (e.g., "microsoft/DialoGPT-medium")
 
 ## API Usage with curl
