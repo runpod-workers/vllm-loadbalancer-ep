@@ -2,15 +2,39 @@
 
 A FastAPI-based load balancer for serving vLLM models with RunPod integration. Provides OpenAI-compatible APIs with streaming and non-streaming text generation.
 
+## Prerequisites
+
+Before you begin, make sure you have:
+
+- A RunPod account (sign up at [runpod.io](https://runpod.io))
+- RunPod API key (available in your RunPod dashboard)
+- Basic understanding of REST APIs and HTTP requests
+- `curl` or a similar tool for testing API endpoints
+
 ## Docker Image
 
 Use the pre-built Docker image: `runpod/vllm-loadbalancer:dev`
+
+## Environment Variables
+
+Configure these environment variables in your RunPod endpoint:
+
+| Variable | Required | Description | Default | Example |
+|----------|----------|-------------|---------|---------|
+| `MODEL_NAME` | **Yes** | HuggingFace model identifier | None | `microsoft/DialoGPT-medium` |
+| `TENSOR_PARALLEL_SIZE` | No | Number of GPUs for model parallelism | `1` | `2` |
+| `DTYPE` | No | Model precision type | `auto` | `float16` |
+| `TRUST_REMOTE_CODE` | No | Allow remote code execution | `true` | `false` |
+| `MAX_MODEL_LEN` | No | Maximum sequence length | None (auto) | `2048` |
+| `GPU_MEMORY_UTILIZATION` | No | GPU memory usage ratio | `0.9` | `0.8` |
+| `ENFORCE_EAGER` | No | Disable CUDA graphs | `false` | `true` |
 
 ## Deployment on RunPod
 
 1. Create a new serverless endpoint
 2. Use Docker image: `runpod/vllm-loadbalancer:dev`
-3. Set environment variable: `MODEL_NAME` (e.g., "microsoft/DialoGPT-medium")
+3. Set required environment variable: `MODEL_NAME` (e.g., "microsoft/DialoGPT-medium")
+4. Optional: Configure additional environment variables as needed
 
 ## API Usage with curl
 

@@ -1,17 +1,45 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
+from contextlib import asynccontextmanager
 from pydantic import BaseModel, Field
-from typing import Optional, List, Union, AsyncGenerator
-import asyncio
+from typing import Optional, List, Union, AsyncGenerator, Literal
 import json
+import logging
 import os
 import uvicorn
 from vllm import AsyncLLMEngine
 from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.sampling_params import SamplingParams
 from vllm.utils import random_uuid
+from utils import format_chat_prompt, create_error_response
 
-app = FastAPI(title="vLLM Load Balancing Server", version="1.0.0")
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+    ]
+)
+logger = logging.getLogger(__name__)
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Initialize the vLLM engine on startup and cleanup on shutdown"""
+    # Startup
+    await create_engine()
+    yield
+    # Shutdown cleanup
+    global engine, engine_ready
+    if engine:
+        logger.info("Shutting down vLLM engine...")
+        # vLLM AsyncLLMEngine doesn't have an explicit shutdown method,
+        # but we can clean up our references
+        engine = None
+        engine_ready = False
+        logger.info("vLLM engine shutdown complete")
+
+app = FastAPI(title="vLLM Load Balancing Server", version="1.0.0", lifespan=lifespan)
 
 # Global variables
 engine: Optional[AsyncLLMEngine] = None
@@ -35,6 +63,19 @@ class GenerationResponse(BaseModel):
     completion_tokens: int
     total_tokens: int
 
+class ChatMessage(BaseModel):
+    role: Literal["system", "user", "assistant"]
+    content: str
+
+class ChatCompletionRequest(BaseModel):
+    messages: List[ChatMessage]
+    max_tokens: int = Field(default=512, ge=1, le=4096)
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    top_p: float = Field(default=0.9, ge=0.0, le=1.0)
+    stop: Optional[Union[str, List[str]]] = None
+    stream: bool = Field(default=False)
+
+
 async def create_engine():
     """Initialize the vLLM engine"""
     global engine, engine_ready
@@ -46,36 +87,34 @@ async def create_engine():
         # Configure engine arguments
         engine_args = AsyncEngineArgs(
             model=model_name,
-            tensor_parallel_size=1,  # Adjust based on your GPU setup
-            dtype="auto",
-            trust_remote_code=True,
-            max_model_len=None,  # Let vLLM decide based on model
-            gpu_memory_utilization=0.9,
-            enforce_eager=False,
+            tensor_parallel_size=int(os.getenv("TENSOR_PARALLEL_SIZE", "1")),
+            dtype=os.getenv("DTYPE", "auto"),
+            trust_remote_code=os.getenv("TRUST_REMOTE_CODE", "true").lower() == "true",
+            max_model_len=int(os.getenv("MAX_MODEL_LEN")) if os.getenv("MAX_MODEL_LEN") else None,
+            gpu_memory_utilization=float(os.getenv("GPU_MEMORY_UTILIZATION", "0.9")),
+            enforce_eager=os.getenv("ENFORCE_EAGER", "false").lower() == "true",
         )
         
         # Create the engine
         engine = AsyncLLMEngine.from_engine_args(engine_args)
         engine_ready = True
-        print(f"vLLM engine initialized successfully with model: {model_name}")
+        logger.info(f"vLLM engine initialized successfully with model: {model_name}")
         
     except Exception as e:
-        print(f"Failed to initialize vLLM engine: {str(e)}")
+        logger.error(f"Failed to initialize vLLM engine: {str(e)}")
         engine_ready = False
         raise
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize the vLLM engine on startup"""
-    await create_engine()
 
 @app.get("/ping")
 async def health_check():
     """Health check endpoint required by RunPod load balancer"""
     if not engine_ready:
+        logger.debug("Health check: Engine initializing")
         # Return 204 when initializing
         return {"status": "initializing"}, 204
     
+    logger.debug("Health check: Engine healthy")
     # Return 200 when healthy
     return {"status": "healthy"}
 
@@ -95,8 +134,12 @@ async def root():
 @app.post("/v1/completions", response_model=GenerationResponse)
 async def generate_completion(request: GenerationRequest):
     """Generate text completion"""
+    logger.info(f"Received completion request: max_tokens={request.max_tokens}, temperature={request.temperature}, stream={request.stream}")
+    
     if not engine_ready or engine is None:
-        raise HTTPException(status_code=503, detail="Engine not ready")
+        logger.warning("Completion request rejected: Engine not ready")
+        error_response = create_error_response("ServiceUnavailable", "Engine not ready")
+        raise HTTPException(status_code=503, detail=error_response.model_dump())
     
     try:
         # Create sampling parameters
@@ -126,15 +169,23 @@ async def generate_completion(request: GenerationRequest):
                 final_output = output
             
             if final_output is None:
-                raise HTTPException(status_code=500, detail="No output generated")
+                request_id = random_uuid()
+                error_response = create_error_response("GenerationError", "No output generated", request_id)
+                raise HTTPException(status_code=500, detail=error_response.model_dump())
             
             generated_text = final_output.outputs[0].text
             finish_reason = final_output.outputs[0].finish_reason
             
-            # Calculate token counts (approximate)
-            prompt_tokens = len(request.prompt.split())
-            completion_tokens = len(generated_text.split())
+            # Calculate token counts using actual token IDs when available
+            if hasattr(final_output, 'prompt_token_ids') and final_output.prompt_token_ids is not None:
+                prompt_tokens = len(final_output.prompt_token_ids)
+            else:
+                # Fallback to approximate word count
+                prompt_tokens = len(request.prompt.split())
             
+            completion_tokens = len(final_output.outputs[0].token_ids)
+            
+            logger.info(f"Completion generated: {completion_tokens} tokens, finish_reason={finish_reason}")
             return GenerationResponse(
                 text=generated_text,
                 finish_reason=finish_reason,
@@ -144,7 +195,10 @@ async def generate_completion(request: GenerationRequest):
             )
             
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
+        request_id = random_uuid()
+        logger.error(f"Generation failed (request_id={request_id}): {str(e)}", exc_info=True)
+        error_response = create_error_response("GenerationError", f"Generation failed: {str(e)}", request_id)
+        raise HTTPException(status_code=500, detail=error_response.model_dump())
 
 async def stream_completion(prompt: str, sampling_params: SamplingParams, request_id: str) -> AsyncGenerator[str, None]:
     """Stream completion generator"""
@@ -160,31 +214,32 @@ async def stream_completion(prompt: str, sampling_params: SamplingParams, reques
         yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
 @app.post("/v1/chat/completions")
-async def chat_completions(request: dict):
+async def chat_completions(request: ChatCompletionRequest):
     """OpenAI-compatible chat completions endpoint"""
+    logger.info(f"Received chat completion request: {len(request.messages)} messages, max_tokens={request.max_tokens}, temperature={request.temperature}")
+    
     if not engine_ready or engine is None:
-        raise HTTPException(status_code=503, detail="Engine not ready")
+        logger.warning("Chat completion request rejected: Engine not ready")
+        error_response = create_error_response("ServiceUnavailable", "Engine not ready")
+        raise HTTPException(status_code=503, detail=error_response.model_dump())
     
     try:
         # Extract messages and convert to prompt
-        messages = request.get("messages", [])
+        messages = request.messages
         if not messages:
-            raise HTTPException(status_code=400, detail="No messages provided")
+            error_response = create_error_response("ValidationError", "No messages provided")
+            raise HTTPException(status_code=400, detail=error_response.model_dump())
         
-        # Simple conversion of messages to prompt (you may want to improve this)
-        prompt = ""
-        for message in messages:
-            role = message.get("role", "user")
-            content = message.get("content", "")
-            prompt += f"{role}: {content}\n"
-        prompt += "assistant: "
+        # Use proper chat template formatting
+        model_name = os.getenv("MODEL_NAME", "microsoft/DialoGPT-medium")
+        prompt = format_chat_prompt(messages, model_name)
         
         # Create sampling parameters from request
         sampling_params = SamplingParams(
-            max_tokens=request.get("max_tokens", 512),
-            temperature=request.get("temperature", 0.7),
-            top_p=request.get("top_p", 0.9),
-            stop=request.get("stop"),
+            max_tokens=request.max_tokens,
+            temperature=request.temperature,
+            top_p=request.top_p,
+            stop=request.stop,
         )
         
         # Generate
@@ -195,9 +250,12 @@ async def chat_completions(request: dict):
             final_output = output
         
         if final_output is None:
-            raise HTTPException(status_code=500, detail="No output generated")
+            error_response = create_error_response("GenerationError", "No output generated", request_id)
+            raise HTTPException(status_code=500, detail=error_response.model_dump())
         
         generated_text = final_output.outputs[0].text
+        completion_tokens = len(final_output.outputs[0].token_ids)
+        logger.info(f"Chat completion generated: {completion_tokens} tokens, finish_reason={final_output.outputs[0].finish_reason}")
         
         # Return OpenAI-compatible response
         return {
@@ -213,19 +271,22 @@ async def chat_completions(request: dict):
                 "finish_reason": final_output.outputs[0].finish_reason
             }],
             "usage": {
-                "prompt_tokens": len(prompt.split()),
-                "completion_tokens": len(generated_text.split()),
-                "total_tokens": len(prompt.split()) + len(generated_text.split())
+                "prompt_tokens": len(final_output.prompt_token_ids) if hasattr(final_output, 'prompt_token_ids') and final_output.prompt_token_ids is not None else len(prompt.split()),
+                "completion_tokens": len(final_output.outputs[0].token_ids),
+                "total_tokens": (len(final_output.prompt_token_ids) if hasattr(final_output, 'prompt_token_ids') and final_output.prompt_token_ids is not None else len(prompt.split())) + len(final_output.outputs[0].token_ids)
             }
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Chat completion failed: {str(e)}")
+        request_id = random_uuid()
+        logger.error(f"Chat completion failed (request_id={request_id}): {str(e)}", exc_info=True)
+        error_response = create_error_response("ChatCompletionError", f"Chat completion failed: {str(e)}", request_id)
+        raise HTTPException(status_code=500, detail=error_response.model_dump())
 
 if __name__ == "__main__":
     # Get ports from environment variables
     port = int(os.getenv("PORT", 8000))
-    print(f"Starting vLLM server on port {port}")
+    logger.info(f"Starting vLLM server on port {port}")
     
     # If health port is different, you'd need to run a separate health server
     # For simplicity, we're using the same port here
