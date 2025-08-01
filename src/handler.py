@@ -1,8 +1,7 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, HTTPException, status
+from fastapi.responses import StreamingResponse, JSONResponse
 from contextlib import asynccontextmanager
-from pydantic import BaseModel, Field
-from typing import Optional, List, Union, AsyncGenerator, Literal
+from typing import Optional, AsyncGenerator
 import json
 import logging
 import os
@@ -12,6 +11,7 @@ from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.sampling_params import SamplingParams
 from vllm.utils import random_uuid
 from utils import format_chat_prompt, create_error_response
+from .models import GenerationRequest, GenerationResponse, ChatCompletionRequest
 
 # Configure logging
 logging.basicConfig(
@@ -39,41 +39,13 @@ async def lifespan(_: FastAPI):
         engine_ready = False
         logger.info("vLLM engine shutdown complete")
 
+
 app = FastAPI(title="vLLM Load Balancing Server", version="1.0.0", lifespan=lifespan)
+
 
 # Global variables
 engine: Optional[AsyncLLMEngine] = None
 engine_ready = False
-
-class GenerationRequest(BaseModel):
-    prompt: str
-    max_tokens: int = Field(default=512, ge=1, le=4096)
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    top_p: float = Field(default=0.9, ge=0.0, le=1.0)
-    top_k: int = Field(default=-1, ge=-1)
-    frequency_penalty: float = Field(default=0.0, ge=-2.0, le=2.0)
-    presence_penalty: float = Field(default=0.0, ge=-2.0, le=2.0)
-    stop: Optional[Union[str, List[str]]] = None
-    stream: bool = Field(default=False)
-
-class GenerationResponse(BaseModel):
-    text: str
-    finish_reason: str
-    prompt_tokens: int
-    completion_tokens: int
-    total_tokens: int
-
-class ChatMessage(BaseModel):
-    role: Literal["system", "user", "assistant"]
-    content: str
-
-class ChatCompletionRequest(BaseModel):
-    messages: List[ChatMessage]
-    max_tokens: int = Field(default=512, ge=1, le=4096)
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    top_p: float = Field(default=0.9, ge=0.0, le=1.0)
-    stop: Optional[Union[str, List[str]]] = None
-    stream: bool = Field(default=False)
 
 
 async def create_engine():
@@ -111,8 +83,11 @@ async def health_check():
     """Health check endpoint required by RunPod load balancer"""
     if not engine_ready:
         logger.debug("Health check: Engine initializing")
-        # Return 204 when initializing
-        return {"status": "initializing"}, 204
+        # Return 503 when initializing
+        return JSONResponse(
+            content={"status": "initializing"},
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
     
     logger.debug("Health check: Engine healthy")
     # Return 200 when healthy

@@ -1,19 +1,6 @@
-from typing import List, Optional
+from typing import List
 from transformers import AutoTokenizer
-from pydantic import BaseModel
-
-
-class ChatMessage:
-    """Chat message for type hints in utils functions"""
-    def __init__(self, role: str, content: str):
-        self.role = role
-        self.content = content
-
-
-class ErrorResponse(BaseModel):
-    error: str
-    detail: str
-    request_id: Optional[str] = None
+from .models import ChatMessage, ErrorResponse
 
 
 def get_tokenizer(model_name: str):
