@@ -86,7 +86,7 @@ async def health_check():
         # Return 503 when initializing
         return JSONResponse(
             content={"status": "initializing"},
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE
+            status_code=status.HTTP_204_NO_CONTENT
         )
     
     logger.debug("Health check: Engine healthy")
