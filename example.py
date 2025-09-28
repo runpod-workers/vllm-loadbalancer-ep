@@ -218,7 +218,7 @@ def main():
     print("🧪 vLLM Streaming Test Suite")
     print("=" * 50)
     print(f"🎯 Endpoint: {ENDPOINT_URL}")
-    print(f"🔑 API Key: {API_KEY[:10]}...")
+    print(f"🔑 API Key: {API_KEY[:10] if API_KEY else None}...")
     
     while True:
         print("\n" + "="*50)
