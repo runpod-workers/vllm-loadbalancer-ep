@@ -7,9 +7,9 @@ import sys
 # Configuration
 ENDPOINT_ID = os.getenv("ENDPOINT_ID", "your-endpoint-id")
 API_KEY = os.getenv("RUNPOD_API_KEY")
-ENDPOINT_URL = f"https://{ENDPOINT_ID}.api.runpod.ai"
+ENDPOINT_URL = os.getenv("ENDPOINT_URL", "http://localhost:8009") if os.getenv("ENDPOINT_URL") else f"https://{ENDPOINT_ID}.api.runpod.ai"
 
-if not API_KEY:
+if not API_KEY and not os.getenv("ENDPOINT_URL"):
     print("Error: Please set RUNPOD_API_KEY environment variable")
     sys.exit(1)
 
@@ -218,7 +218,7 @@ def main():
     print("🧪 vLLM Streaming Test Suite")
     print("=" * 50)
     print(f"🎯 Endpoint: {ENDPOINT_URL}")
-    print(f"🔑 API Key: {API_KEY[:10]}...")
+    print(f"🔑 API Key: {API_KEY[:10] if API_KEY else None}...")
     
     while True:
         print("\n" + "="*50)
