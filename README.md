@@ -1,4 +1,6 @@
 # OpenAI-Compatible vLLM Load Balancer
+![vLLM worker banner](https://image.runpod.ai/preview/vllm/vllm-banner.png)
+
 
 A FastAPI-based load balancer for serving vLLM models on Runpod. Built on top of [worker-vllm](https://github.com/runpod-workers/worker-vllm) as the base inference engine, extending it with Runpod's load balancer protocol and additional API endpoints.
 
