@@ -1,6 +1,6 @@
-# vLLM Load Balancer
+# OpenAI-Compatible vLLM Load Balancer
 
-A FastAPI-based load balancer for serving vLLM models on RunPod. Built on top of [worker-vllm](https://github.com/runpod-workers/worker-vllm) as the base inference engine, extending it with RunPod's load balancer protocol and additional API endpoints.
+A FastAPI-based load balancer for serving vLLM models on Runpod. Built on top of [worker-vllm](https://github.com/runpod-workers/worker-vllm) as the base inference engine, extending it with Runpod's load balancer protocol and additional API endpoints.
 
 ## Architecture
 
@@ -9,7 +9,7 @@ worker-vllm (submodule)
   └── src/engine.py        → vLLMEngine: model loading, engine args, tokenizer
   └── src/download_model.py → optional model pre-baking
 
-handler_lb.py              → FastAPI server with RunPod LB protocol
+handler_lb.py              → FastAPI server with Runpod LB protocol
   ├── /ping                → health check (204 = init, 200 = ready)
   ├── /v1/models           → list available models
   ├── /v1/chat/completions → OpenAI chat completions (streaming + non-streaming)
@@ -18,14 +18,14 @@ handler_lb.py              → FastAPI server with RunPod LB protocol
   └── /v1/messages         → Anthropic Messages API (streaming + non-streaming)
 ```
 
-RunPod's load balancer polls `/ping` to manage worker routing:
+Runpod's load balancer polls `/ping` to manage worker routing:
 - `204` — worker is initializing (not routed)
 - `200` — worker is ready (included in pool)
 
 ## Prerequisites
 
-- A RunPod account ([runpod.io](https://runpod.io))
-- RunPod API key (available in your RunPod dashboard)
+- A Runpod account ([runpod.io](https://runpod.io))
+- Runpod API key (available in your RunP[d dashboard)
 
 ## Docker Image
 
@@ -62,7 +62,7 @@ Use the pre-built Docker image: `runpod/vllm-loadbalancer:latest`
 | `ENABLE_FORCE_INCLUDE_USAGE` | Always include usage in response | `false` |
 | `PORT` | HTTP server port | `80` |
 
-## Deployment on RunPod
+## Deployment on Runpod
 
 1. Create a new serverless endpoint
 2. Use Docker image: `runpod/vllm-loadbalancer:latest`

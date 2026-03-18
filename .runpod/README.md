@@ -1,6 +1,6 @@
 ![vLLM worker banner](https://cpjrphpz3t5wbwfe.public.blob.vercel-storage.com/worker-vllm_banner.jpeg)
 
-Run LLMs using [vLLM](https://docs.vllm.ai) with OpenAI-compatible and Anthropic-compatible APIs on RunPod's Load Balancer for high-throughput, multi-worker scalability.
+Run LLMs using [vLLM](https://docs.vllm.ai) with OpenAI-compatible and Anthropic-compatible APIs on Runpod's Load Balancer for high-throughput, multi-worker scalability.
 
 Built on [worker-vllm](https://github.com/runpod-workers/worker-vllm) as the base inference engine.
 
@@ -31,7 +31,7 @@ For complete configuration options, see the [full configuration documentation](h
 
 ## API Endpoints
 
-This worker exposes direct HTTP endpoints (no RunPod serverless wrapper). Use your endpoint URL directly:
+This worker exposes direct HTTP endpoints (no Runpod serverless wrapper). Use your endpoint URL directly:
 
 ```
 https://<ENDPOINT_ID>.api.runpod.ai/
