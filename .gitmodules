@@ -1,0 +1,3 @@
+[submodule "worker-vllm"]
+	path = worker-vllm
+	url = https://github.com/runpod-workers/worker-vllm
