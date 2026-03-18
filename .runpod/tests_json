@@ -1,0 +1,64 @@
+{
+  "tests": [
+    {
+      "name": "chat_completions_test",
+      "input": {
+        "openai_route": "/v1/chat/completions",
+        "openai_input": {
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a helpful assistant that writes concise responses."
+            },
+            {
+              "role": "user",
+              "content": "What is the capital of France? Reply in one word."
+            }
+          ],
+          "max_tokens": 16,
+          "temperature": 0.0
+        }
+      },
+      "timeout": 30000
+    },
+    {
+      "name": "text_completions_test",
+      "input": {
+        "openai_route": "/v1/completions",
+        "openai_input": {
+          "prompt": "The capital of France is",
+          "max_tokens": 8,
+          "temperature": 0.0
+        }
+      },
+      "timeout": 30000
+    },
+    {
+      "name": "anthropic_messages_test",
+      "input": {
+        "openai_route": "/v1/messages",
+        "openai_input": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "What is the capital of France? Reply in one word."
+            }
+          ],
+          "max_tokens": 16
+        }
+      },
+      "timeout": 30000
+    }
+  ],
+  "config": {
+    "gpuTypeId": "NVIDIA GeForce RTX 4090",
+    "gpuCount": 1,
+    "env": [
+      {
+        "key": "MODEL_NAME",
+        "value": "HuggingFaceTB/SmolLM2-135M-Instruct"
+      }
+    ],
+    "allowedCudaVersions": ["12.9", "12.8", "12.7", "12.6", "12.5"]
+  }
+}
