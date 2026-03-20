@@ -2,7 +2,7 @@ FROM nvidia/cuda:12.9.1-base-ubuntu22.04
 
 RUN apt-get update -y \
     && apt-get install -y python3-pip curl \
-    && curl -LsSf https://astral.sh/uv/install.sh | sh
+    && curl -LsSf https://astral.sh/uv/0.10.9/install.sh  | sh
 
 ENV PATH="/root/.local/bin:$PATH"
 
@@ -45,7 +45,7 @@ ENV MODEL_NAME=$MODEL_NAME \
 ENV PYTHONPATH="/:/vllm-workspace"
 
 RUN if [ "${LMCACHE}" = "true" ]; then \
-    uv pip install --system lmcache; \
+    uv pip install --system "lmcache==0.4.2"; \
 fi
 
 RUN if [ "${VLLM_NIGHTLY}" = "true" ]; then \
