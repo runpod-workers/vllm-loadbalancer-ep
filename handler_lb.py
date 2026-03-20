@@ -148,9 +148,28 @@ app = FastAPI(title="vLLM Load Balancer Worker", lifespan=lifespan)
 async def ping():
     """
     Health check required by RunPod load balancer.
-    Returns 204 while engine is loading, 200 once ready.
+    Returns 204 while engine is loading or not fully initialized, 200 once ready.
     """
-    return Response(status_code=200 if _is_ready else 204)
+    if not _is_ready:
+        log.debug("Health check: Engine not ready")
+        return Response(status_code=204)
+
+    # Validate all engine states to prevent routing to partially initialized workers
+    if not all(engines is not None for engines in [
+        _chat_engine,
+        _completion_engine,
+        _responses_engine,
+        _messages_engine
+    ]):
+        log.debug("Health check: Engine(s) not fully initialized")
+        return Response(status_code=204)
+
+    if not _serving_models:
+        log.debug("Health check: Serving models not initialized")
+        return Response(status_code=204)
+
+    log.debug("Health check: Engine ready")
+    return Response(status_code=200)
 
 
 @app.get("/v1/models")
@@ -169,6 +188,7 @@ async def chat_completions(request: Request):
     try:
         req = ChatCompletionRequest(**body)
     except Exception as e:
+        log.warning(f"Chat completions validation error: {e}")
         return JSONResponse(
             {"error": {"message": str(e), "type": "invalid_request_error"}},
             status_code=422,
@@ -177,6 +197,7 @@ async def chat_completions(request: Request):
     response = await _chat_engine.create_chat_completion(req, raw_request=request)
 
     if isinstance(response, ErrorResponse):
+        log.error(f"Chat completions engine error: {response.error.message} (code: {response.error.code})")
         return JSONResponse(response.model_dump(), status_code=response.error.code)
 
     if not body.get("stream"):
@@ -199,6 +220,7 @@ async def completions(request: Request):
     try:
         req = CompletionRequest(**body)
     except Exception as e:
+        log.warning(f"Completions validation error: {e}")
         return JSONResponse(
             {"error": {"message": str(e), "type": "invalid_request_error"}},
             status_code=422,
@@ -207,6 +229,7 @@ async def completions(request: Request):
     response = await _completion_engine.create_completion(req, raw_request=request)
 
     if isinstance(response, ErrorResponse):
+        log.error(f"Completions engine error: {response.error.message} (code: {response.error.code})")
         return JSONResponse(response.model_dump(), status_code=response.error.code)
 
     if not body.get("stream"):
@@ -229,6 +252,7 @@ async def create_responses(request: Request):
     try:
         req = ResponsesRequest(**body)
     except Exception as e:
+        log.warning(f"Responses validation error: {e}")
         return JSONResponse(
             {"error": {"message": str(e), "type": "invalid_request_error"}},
             status_code=422,
@@ -237,6 +261,7 @@ async def create_responses(request: Request):
     response = await _responses_engine.create_responses(req, raw_request=request)
 
     if isinstance(response, ErrorResponse):
+        log.error(f"Responses engine error: {response.error.message} (code: {response.error.code})")
         return JSONResponse(response.model_dump(), status_code=response.error.code)
 
     if isinstance(response, ResponsesResponse):
@@ -260,11 +285,19 @@ async def retrieve_responses(
     from vllm.entrypoints.openai.protocol import ResponsesResponse
     from vllm.entrypoints.openai.engine.protocol import ErrorResponse
 
-    response = await _responses_engine.retrieve_responses(
-        response_id, starting_after=starting_after, stream=stream
-    )
+    try:
+        response = await _responses_engine.retrieve_responses(
+            response_id, starting_after=starting_after, stream=stream
+        )
+    except Exception as e:
+        log.warning(f"Retrieve responses error: {e}")
+        return JSONResponse(
+            {"error": {"type": "invalid_request_error", "message": str(e)}},
+            status_code=422,
+        )
 
     if isinstance(response, ErrorResponse):
+        log.error(f"Retrieve responses engine error: {response.error.message} (code: {response.error.code})")
         return JSONResponse(response.model_dump(), status_code=response.error.code)
 
     if isinstance(response, ResponsesResponse):
@@ -283,9 +316,17 @@ async def cancel_responses(response_id: str, request: Request):
     from vllm.entrypoints.openai.protocol import ResponsesResponse
     from vllm.entrypoints.openai.engine.protocol import ErrorResponse
 
-    response = await _responses_engine.cancel_responses(response_id)
+    try:
+        response = await _responses_engine.cancel_responses(response_id)
+    except Exception as e:
+        log.warning(f"Cancel responses error: {e}")
+        return JSONResponse(
+            {"error": {"type": "invalid_request_error", "message": str(e)}},
+            status_code=422,
+        )
 
     if isinstance(response, ErrorResponse):
+        log.error(f"Cancel responses engine error: {response.error.message} (code: {response.error.code})")
         return JSONResponse(response.model_dump(), status_code=response.error.code)
 
     return JSONResponse(response.model_dump())
@@ -306,6 +347,7 @@ async def create_messages(request: Request):
     try:
         req = AnthropicMessagesRequest(**body)
     except Exception as e:
+        log.warning(f"Messages validation error: {e}")
         return JSONResponse(
             {"error": {"type": "invalid_request_error", "message": str(e)}},
             status_code=422,
@@ -314,6 +356,7 @@ async def create_messages(request: Request):
     response = await _messages_engine.create_messages(req, raw_request=request)
 
     if isinstance(response, ErrorResponse):
+        log.error(f"Messages engine error: {response.error.message} (code: {response.error.code})")
         return JSONResponse(
             AnthropicErrorResponse(
                 error=AnthropicError(type=response.error.type, message=response.error.message)
