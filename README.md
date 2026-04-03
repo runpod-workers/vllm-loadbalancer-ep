@@ -133,7 +133,7 @@ Then use Claude Code normally — requests will be routed to your vLLM-backed en
 Example with a specific endpoint:
 
 ```bash
-export ANTHROPIC_BASE_URL=https://c0d2nwfzao5dej.api.runpod.ai/
+export ANTHROPIC_BASE_URL=https://<endpoint-id>.api.runpod.ai/
 export ANTHROPIC_API_KEY=$RUNPOD_API_KEY
 claude --model <MODEL_NAME>
 # example: claude --model zai-org/GLM-4.7-Flash
