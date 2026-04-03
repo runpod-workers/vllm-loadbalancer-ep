@@ -27,7 +27,7 @@ Runpod's load balancer polls `/ping` to manage worker routing:
 ## Prerequisites
 
 - A Runpod account ([runpod.io](https://runpod.io))
-- Runpod API key (available in your RunP[d dashboard)
+- Runpod API key (available in your Runpod dashboard)
 
 ## Docker Image
 
