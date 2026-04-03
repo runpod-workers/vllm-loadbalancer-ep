@@ -21,6 +21,23 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
+from vllm.entrypoints.anthropic.protocol import (
+    AnthropicError,
+    AnthropicErrorResponse,
+    AnthropicMessagesRequest,
+    AnthropicMessagesResponse,
+)
+from vllm.entrypoints.openai.chat_completion.protocol import (
+    ChatCompletionRequest,
+    ChatCompletionResponse,
+)
+from vllm.entrypoints.openai.completion.protocol import (
+    CompletionRequest,
+    CompletionResponse,
+)
+from vllm.entrypoints.openai.engine.protocol import ErrorResponse
+from vllm.entrypoints.openai.responses.protocol import ResponsesRequest, ResponsesResponse
+
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
@@ -180,9 +197,6 @@ async def list_models():
 
 @app.post("/v1/chat/completions")
 async def chat_completions(request: Request):
-    from vllm.entrypoints.openai.chat_completion.protocol import ChatCompletionRequest
-    from vllm.entrypoints.openai.engine.protocol import ErrorResponse
-
     body = await request.json()
 
     try:
@@ -200,7 +214,7 @@ async def chat_completions(request: Request):
         log.error(f"Chat completions engine error: {response.error.message} (code: {response.error.code})")
         return JSONResponse(response.model_dump(), status_code=response.error.code)
 
-    if not body.get("stream"):
+    if isinstance(response, ChatCompletionResponse):
         return JSONResponse(response.model_dump())
 
     async def event_stream():
@@ -212,9 +226,6 @@ async def chat_completions(request: Request):
 
 @app.post("/v1/completions")
 async def completions(request: Request):
-    from vllm.entrypoints.openai.completion.protocol import CompletionRequest
-    from vllm.entrypoints.openai.engine.protocol import ErrorResponse
-
     body = await request.json()
 
     try:
@@ -232,7 +243,7 @@ async def completions(request: Request):
         log.error(f"Completions engine error: {response.error.message} (code: {response.error.code})")
         return JSONResponse(response.model_dump(), status_code=response.error.code)
 
-    if not body.get("stream"):
+    if isinstance(response, CompletionResponse):
         return JSONResponse(response.model_dump())
 
     async def event_stream():
@@ -244,9 +255,6 @@ async def completions(request: Request):
 
 @app.post("/v1/responses")
 async def create_responses(request: Request):
-    from vllm.entrypoints.openai.responses.protocol import ResponsesRequest, ResponsesResponse
-    from vllm.entrypoints.openai.engine.protocol import ErrorResponse
-
     body = await request.json()
 
     try:
@@ -282,9 +290,6 @@ async def retrieve_responses(
     starting_after: int | None = None,
     stream: bool | None = False,
 ):
-    from vllm.entrypoints.openai.protocol import ResponsesResponse
-    from vllm.entrypoints.openai.engine.protocol import ErrorResponse
-
     try:
         response = await _responses_engine.retrieve_responses(
             response_id, starting_after=starting_after, stream=stream
@@ -313,9 +318,6 @@ async def retrieve_responses(
 
 @app.post("/v1/responses/{response_id}/cancel")
 async def cancel_responses(response_id: str, request: Request):
-    from vllm.entrypoints.openai.protocol import ResponsesResponse
-    from vllm.entrypoints.openai.engine.protocol import ErrorResponse
-
     try:
         response = await _responses_engine.cancel_responses(response_id)
     except Exception as e:
@@ -334,14 +336,6 @@ async def cancel_responses(response_id: str, request: Request):
 
 @app.post("/v1/messages")
 async def create_messages(request: Request):
-    from vllm.entrypoints.anthropic.protocol import (
-        AnthropicMessagesRequest,
-        AnthropicMessagesResponse,
-        AnthropicErrorResponse,
-        AnthropicError,
-    )
-    from vllm.entrypoints.openai.engine.protocol import ErrorResponse
-
     body = await request.json()
 
     try:
