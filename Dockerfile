@@ -25,7 +25,7 @@ ARG QUANTIZATION=""
 ARG MODEL_REVISION=""
 ARG TOKENIZER_REVISION=""
 ARG VLLM_NIGHTLY="false"
-ARG LMCACHE="true"
+
 
 ENV MODEL_NAME=$MODEL_NAME \
     MODEL_REVISION=$MODEL_REVISION \
@@ -43,10 +43,6 @@ ENV MODEL_NAME=$MODEL_NAME \
     RAYON_NUM_THREADS=4
 
 ENV PYTHONPATH="/:/vllm-workspace"
-
-RUN if [ "${LMCACHE}" = "true" ]; then \
-    uv pip install --system "lmcache==0.4.2"; \
-fi
 
 RUN if [ "${VLLM_NIGHTLY}" = "true" ]; then \
     uv pip install --system -U vllm --pre --index-url https://pypi.org/simple --extra-index-url https://wheels.vllm.ai/nightly && \
