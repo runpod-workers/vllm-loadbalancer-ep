@@ -1,29 +1,65 @@
-FROM nvidia/cuda:12.1.0-base-ubuntu22.04 
+FROM nvidia/cuda:12.9.1-base-ubuntu22.04
 
 RUN apt-get update -y \
-    && apt-get install -y python3-pip
+    && apt-get install -y python3-pip curl \
+    && curl -LsSf https://astral.sh/uv/0.10.9/install.sh  | sh
 
-RUN ldconfig /usr/local/cuda-12.1/compat/
+ENV PATH="/root/.local/bin:$PATH"
 
-# Install Python dependencies
-COPY builder/requirements.txt /requirements.txt
-RUN --mount=type=cache,target=/root/.cache/pip \
-    python3 -m pip install --upgrade pip && \
-    python3 -m pip install --upgrade -r /requirements.txt
+RUN ldconfig /usr/local/cuda-12.9/compat/
 
-# Pin vLLM version for stability - 0.9.1 is latest stable as of 2024-07
-# FlashInfer provides optimized attention for better performance
-ARG VLLM_VERSION=0.9.1
-ARG CUDA_VERSION=cu121
-ARG TORCH_VERSION=torch2.3
+# Install vLLM with FlashInfer - use CUDA 12.9 PyTorch wheels
+RUN uv pip install --system "packaging>=24.2" && \
+    uv pip install --system "vllm[flashinfer]==0.16.0" --extra-index-url https://download.pytorch.org/whl/cu129
 
-RUN python3 -m pip install vllm==${VLLM_VERSION} && \
-    python3 -m pip install flashinfer -i https://flashinfer.ai/whl/${CUDA_VERSION}/${TORCH_VERSION}
+# Install additional Python dependencies (after vLLM to avoid PyTorch version conflicts)
+COPY worker-vllm/builder/requirements.txt /requirements.txt
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system -r /requirements.txt
+
+# Setup for Option 2: Building the Image with the Model included
+ARG MODEL_NAME=""
+ARG TOKENIZER_NAME=""
+ARG BASE_PATH="/runpod-volume"
+ARG QUANTIZATION=""
+ARG MODEL_REVISION=""
+ARG TOKENIZER_REVISION=""
+ARG VLLM_NIGHTLY="false"
+
+
+ENV MODEL_NAME=$MODEL_NAME \
+    MODEL_REVISION=$MODEL_REVISION \
+    TOKENIZER_NAME=$TOKENIZER_NAME \
+    TOKENIZER_REVISION=$TOKENIZER_REVISION \
+    BASE_PATH=$BASE_PATH \
+    QUANTIZATION=$QUANTIZATION \
+    HF_DATASETS_CACHE="${BASE_PATH}/huggingface-cache/datasets" \
+    HUGGINGFACE_HUB_CACHE="${BASE_PATH}/huggingface-cache/hub" \
+    HF_HOME="${BASE_PATH}/huggingface-cache/hub" \
+    HF_HUB_ENABLE_HF_TRANSFER=0 \
+    RAY_METRICS_EXPORT_ENABLED=0 \
+    RAY_DISABLE_USAGE_STATS=1 \
+    TOKENIZERS_PARALLELISM=false \
+    RAYON_NUM_THREADS=4
 
 ENV PYTHONPATH="/:/vllm-workspace"
 
-COPY src /src
+RUN if [ "${VLLM_NIGHTLY}" = "true" ]; then \
+    uv pip install --system -U vllm --pre --index-url https://pypi.org/simple --extra-index-url https://wheels.vllm.ai/nightly && \
+    apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/* && \
+    uv pip install --system git+https://github.com/huggingface/transformers.git; \
+fi
 
-WORKDIR /src
+COPY worker-vllm/src /src
+COPY handler_lb.py /src/handler_lb.py
+RUN --mount=type=secret,id=HF_TOKEN,required=false \
+    if [ -f /run/secrets/HF_TOKEN ]; then \
+    export HF_TOKEN=$(cat /run/secrets/HF_TOKEN); \
+    fi && \
+    if [ -n "$MODEL_NAME" ]; then \
+    python3 /src/download_model.py; \
+    fi
 
-CMD ["python3", "handler.py"]
+EXPOSE 80
+
+CMD ["python3", "/src/handler_lb.py"]
