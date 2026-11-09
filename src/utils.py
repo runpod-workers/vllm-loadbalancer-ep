@@ -1,6 +1,6 @@
 from typing import List
 from transformers import AutoTokenizer
-from .models import ChatMessage, ErrorResponse
+from models import ChatMessage, ErrorResponse
 
 
 def get_tokenizer(model_name: str):
