@@ -1,0 +1,41 @@
+{
+  "tests": [
+    {
+      "name": "completion",
+      "input": {
+        "method": "POST",
+        "path": "/v1/completions",
+        "body": {"prompt": "The capital of France is", "max_tokens": 8, "temperature": 0}
+      },
+      "timeout": 120000
+    },
+    {
+      "name": "chat_completion",
+      "input": {
+        "method": "POST",
+        "path": "/v1/chat/completions",
+        "body": {"messages": [{"role": "user", "content": "Say hello."}], "max_tokens": 8, "temperature": 0}
+      },
+      "timeout": 120000
+    },
+    {
+      "name": "rejects_invalid_request",
+      "input": {
+        "method": "POST",
+        "path": "/v1/completions",
+        "body": {"max_tokens": 8},
+        "status": 422
+      },
+      "timeout": 60000
+    }
+  ],
+  "config": {
+    "gpuTypeId": "NVIDIA GeForce RTX 4090",
+    "gpuCount": 1,
+    "allowedCudaVersions": ["12.8", "12.9", "13.0"],
+    "env": [
+      {"key": "MODEL_NAME", "value": "Qwen/Qwen2.5-0.5B-Instruct"},
+      {"key": "MAX_MODEL_LEN", "value": "2048"}
+    ]
+  }
+}
