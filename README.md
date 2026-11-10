@@ -1,13 +1,13 @@
 # vLLM Load Balancer
 
-A FastAPI-based load balancer for serving vLLM models with RunPod integration. Provides OpenAI-compatible APIs with streaming and non-streaming text generation.
+A FastAPI-based load balancer for serving vLLM models with Runpod integration. Provides OpenAI-compatible APIs with streaming and non-streaming text generation.
 
 ## Prerequisites
 
 Before you begin, make sure you have:
 
-- A RunPod account (sign up at [runpod.io](https://runpod.io))
-- RunPod API key (available in your RunPod dashboard)
+- A Runpod account (sign up at [runpod.io](https://runpod.io))
+- Runpod API key (available in your Runpod dashboard)
 - Basic understanding of REST APIs and HTTP requests
 - `curl` or a similar tool for testing API endpoints
 
@@ -17,7 +17,7 @@ Use the pre-built Docker image: `runpod/vllm-loadbalancer:dev`
 
 ## Environment Variables
 
-Configure these environment variables in your RunPod endpoint:
+Configure these environment variables in your Runpod endpoint:
 
 | Variable | Required | Description | Default | Example |
 |----------|----------|-------------|---------|---------|
@@ -29,7 +29,7 @@ Configure these environment variables in your RunPod endpoint:
 | `GPU_MEMORY_UTILIZATION` | No | GPU memory usage ratio | `0.9` | `0.8` |
 | `ENFORCE_EAGER` | No | Disable CUDA graphs | `false` | `true` |
 
-## Deployment on RunPod
+## Deployment on Runpod
 
 1. Create a new serverless endpoint
 2. Use Docker image: `runpod/vllm-loadbalancer:dev`
