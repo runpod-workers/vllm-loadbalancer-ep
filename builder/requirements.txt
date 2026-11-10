@@ -8,7 +8,7 @@
 ray
 pandas
 pyarrow
-runpod~=1.11.0
+runpod~=2.2.0
 huggingface-hub
 packaging
 pydantic
